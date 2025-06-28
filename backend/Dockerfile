@@ -26,5 +26,5 @@ RUN mkdir -p /app/data
 # Expose port (FastAPI will run on 80 inside container)
 EXPOSE 80
 
-# Command to start the server (using Uvicorn)
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "80", "--reload"] 
+# Command to start the server (using our production API)
+CMD ["uvicorn", "api_simple:app", "--host", "0.0.0.0", "--port", "80"] 

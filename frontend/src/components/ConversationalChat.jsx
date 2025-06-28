@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './ConversationalChat.css';
+import ApiService from '../services/api.js';
 
 // Global flag to prevent React.StrictMode double initialization
 let globalConversationStarted = false;
@@ -270,10 +271,60 @@ const ConversationalChat = ({ onShowLeadForm, onAvatarStateChange, showAvatar = 
   };
 
   const handlePersonalizedResponse = async (choice) => {
+    // Build user profile from conversation history
+    const profileData = {
+      country: extractCountryFromProfile(),
+      goal: extractGoalFromProfile(),
+      status: choice === 'bachelors_plus' ? 'none' : 'none',
+      hasJobOffer: choice === 'bachelors_plus' || choice === 'has_job_offer',
+      education: choice === 'bachelors_plus' ? 'bachelors_plus' : undefined
+    };
+
     if (choice === 'bachelors_plus') {
-      addMessage("Perfect! With a bachelor's degree and a job offer, you're well-positioned for an H1B visa. The process typically takes 6-8 months.");
+      // Get real guidance from API
+      try {
+        addMessage("Let me analyze your situation and provide personalized guidance...");
+        await simulateTyping(1000);
+        
+        const guidance = await ApiService.getGuidance({
+          ...profileData,
+          goal: 'work',
+          status: 'none'
+        });
+        
+        if (guidance.recommended_visa) {
+          addMessage(`Perfect! Based on your profile, I recommend the ${guidance.recommended_visa} path.`);
+          await simulateTyping(1500);
+          
+          if (guidance.next_steps && guidance.next_steps.length > 0) {
+            addMessage("Here are your specific next steps:");
+            await simulateTyping(800);
+            
+            const stepsText = guidance.next_steps.map((step, index) => 
+              `${index + 1}. ${step}`
+            ).join('\n');
+            addMessage(stepsText);
+          }
+          
+          if (guidance.estimated_timeline) {
+            await simulateTyping(1000);
+            addMessage(`**Timeline:** ${guidance.estimated_timeline}`);
+          }
+          
+          if (guidance.country_specific && guidance.country_specific.length > 0) {
+            await simulateTyping(1000);
+            addMessage("**Country-specific notes:** " + guidance.country_specific.join(', '));
+          }
+        } else {
+          addMessage("Perfect! With a bachelor's degree and a job offer, you're well-positioned for an H1B visa. The process typically takes 6-8 months.");
+        }
+      } catch (error) {
+        console.error('API call failed, using fallback:', error);
+        addMessage("Perfect! With a bachelor's degree and a job offer, you're well-positioned for an H1B visa. The process typically takes 6-8 months.");
+      }
+      
       await simulateTyping(1500);
-      addMessage("Key steps: 1) Employer files H1B petition 2) Wait for approval 3) Apply for visa at consulate. Would you like me to explain any of these steps in detail?");
+      addMessage("Would you like me to explain any of these steps in detail?");
       
       await simulateTyping(500);
       addMessage("", false, true, [
@@ -284,9 +335,34 @@ const ConversationalChat = ({ onShowLeadForm, onAvatarStateChange, showAvatar = 
       setWaitingForUser(true);
       
     } else if (choice === 'tech_field') {
-      addMessage("Technology professionals from China have excellent opportunities! With current demand for tech talent, you have several visa paths.");
+      // Get real API guidance for tech professionals
+      try {
+        addMessage("Let me get specific guidance for technology professionals...");
+        await simulateTyping(1000);
+        
+        const guidance = await ApiService.getGuidance({
+          ...profileData,
+          goal: 'work'
+        });
+        
+        if (guidance.next_steps && guidance.next_steps.length > 0) {
+          addMessage("Technology professionals have excellent opportunities! Here's what I recommend:");
+          await simulateTyping(1000);
+          
+          const stepsText = guidance.next_steps.map((step, index) => 
+            `${index + 1}. ${step}`
+          ).join('\n');
+          addMessage(stepsText);
+        } else {
+          addMessage("Technology professionals from your country have excellent opportunities! With current demand for tech talent, you have several visa paths.");
+        }
+      } catch (error) {
+        console.error('API call failed, using fallback:', error);
+        addMessage("Technology professionals have excellent opportunities! With current demand for tech talent, you have several visa paths.");
+      }
+      
       await simulateTyping(1500);
-      addMessage("Your best options are likely H1B for specialty positions or L1 if transferring from a Chinese office. What specific role is your job offer for?");
+      addMessage("What specific role is your job offer for?");
       
       setShowInputField(true);
       setInputPlaceholder("Describe your job role (e.g., Software Engineer, Data Scientist)...");
@@ -364,8 +440,34 @@ const ConversationalChat = ({ onShowLeadForm, onAvatarStateChange, showAvatar = 
         }, 1000);
       }
     } else {
-      // Default response for unhandled choices
-      addMessage("Thank you for that information! Let me provide you with some guidance based on your situation.");
+      // Use API for other responses
+      try {
+        addMessage("Let me get personalized guidance for your situation...");
+        await simulateTyping(1000);
+        
+        const guidance = await ApiService.getGuidance(profileData);
+        
+        if (guidance.next_steps && guidance.next_steps.length > 0) {
+          addMessage("Based on your profile, here's what I recommend:");
+          await simulateTyping(1000);
+          
+          const stepsText = guidance.next_steps.map((step, index) => 
+            `${index + 1}. ${step}`
+          ).join('\n');
+          addMessage(stepsText);
+          
+          if (guidance.estimated_timeline) {
+            await simulateTyping(1000);
+            addMessage(`**Expected timeline:** ${guidance.estimated_timeline}`);
+          }
+        } else {
+          addMessage("Thank you for that information! Let me provide you with some guidance based on your situation.");
+        }
+      } catch (error) {
+        console.error('API call failed, using fallback:', error);
+        addMessage("Thank you for that information! Let me provide you with some guidance based on your situation.");
+      }
+      
       await simulateTyping(1500);
       addMessage("Every immigration case is unique. I'd recommend getting a personalized assessment to give you the most accurate guidance for your specific situation.");
       
@@ -376,6 +478,26 @@ const ConversationalChat = ({ onShowLeadForm, onAvatarStateChange, showAvatar = 
       ]);
       setWaitingForUser(true);
     }
+  };
+
+  // Helper function to extract country from user profile
+  const extractCountryFromProfile = () => {
+    const countryKeys = Object.keys(userProfile).filter(key => key.startsWith('from_'));
+    if (countryKeys.length > 0) {
+      return countryKeys[0].replace('from_', '').replace('_', ' ');
+    }
+    return 'unknown';
+  };
+
+  // Helper function to extract goal from user profile
+  const extractGoalFromProfile = () => {
+    if (userProfile.work_visas) return 'work';
+    if (userProfile.student_visas) return 'study';
+    if (userProfile.family_green_card) return 'family';
+    if (userProfile.employment_green_card) return 'permanent_residence';
+    if (userProfile.investment_visas) return 'invest';
+    if (userProfile.tourist_business) return 'visit';
+    return 'unknown';
   };
 
   const handleTextInput = async (text) => {
@@ -401,35 +523,71 @@ const ConversationalChat = ({ onShowLeadForm, onAvatarStateChange, showAvatar = 
       setWaitingForUser(true);
       
     } else {
-      // Provide specific answers based on user question and profile
-      const question = text.toLowerCase();
-      let response = "";
-      
-      // Determine user's context from profile
-      const country = Object.keys(userProfile).find(key => key.startsWith('from_'));
-      const visaType = userProfile.visa_types || userProfile.family_green_card || userProfile.work_visas;
-      
-      if (question.includes('how long') || question.includes('timeline') || question.includes('time')) {
-        if (visaType === 'family_green_card') {
-          response = "Family-based Green Card processing times vary significantly:\n\n• **Immediate relatives** (spouse, unmarried children under 21, parents of US citizens): 8-12 months\n• **F1 category** (unmarried adult children of US citizens): 1-2 years\n• **F2A** (spouses/children of permanent residents): 2-3 years\n• **F3/F4** (siblings, married children): 10-20+ years\n\nProcessing also depends on your country - some countries have longer waits due to per-country limits.";
-        } else if (visaType === 'work_visas') {
-          response = "Work visa processing times:\n\n• **H1B**: 3-8 months (faster with premium processing)\n• **L1**: 2-4 months\n• **O1**: 2-3 months\n• **TN** (for Canadians/Mexicans): Same day at border\n\nEmployer petition filing + consular processing if outside US adds 2-3 months.";
-        } else if (visaType === 'student_visas') {
-          response = "Student visa processing:\n\n• **F1 visa application**: 2-8 weeks\n• **I-20 processing** by school: 2-4 weeks\n• **Consular interview**: 1-4 weeks wait time\n\nTotal timeline: 2-4 months from application to arrival in US.";
+      // Use real API for free-form questions
+      try {
+        addMessage("Let me look that up for you...");
+        
+        // Build user profile for context
+        const profileData = {
+          country: extractCountryFromProfile(),
+          goal: extractGoalFromProfile(),
+          status: 'none'
+        };
+        
+        // Get streaming response from API
+        const response = await ApiService.askQuestion(text, profileData);
+        
+        // Replace the "looking up" message with the real response
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage && !lastMessage.isUser && lastMessage.text.includes("Let me look that up")) {
+            lastMessage.text = response;
+          }
+          return newMessages;
+        });
+        
+      } catch (error) {
+        console.error('API call failed, using fallback response:', error);
+        
+        // Fallback to structured responses if API fails
+        const question = text.toLowerCase();
+        let response = "";
+        
+        // Determine user's context from profile
+        const country = Object.keys(userProfile).find(key => key.startsWith('from_'));
+        const visaType = userProfile.visa_types || userProfile.family_green_card || userProfile.work_visas;
+        
+        if (question.includes('how long') || question.includes('timeline') || question.includes('time')) {
+          if (visaType === 'family_green_card') {
+            response = "Family-based Green Card processing times vary significantly:\n\n• **Immediate relatives** (spouse, unmarried children under 21, parents of US citizens): 8-12 months\n• **F1 category** (unmarried adult children of US citizens): 1-2 years\n• **F2A** (spouses/children of permanent residents): 2-3 years\n• **F3/F4** (siblings, married children): 10-20+ years\n\nProcessing also depends on your country - some countries have longer waits due to per-country limits.";
+          } else if (visaType === 'work_visas') {
+            response = "Work visa processing times:\n\n• **H1B**: 3-8 months (faster with premium processing)\n• **L1**: 2-4 months\n• **O1**: 2-3 months\n• **TN** (for Canadians/Mexicans): Same day at border\n\nEmployer petition filing + consular processing if outside US adds 2-3 months.";
+          } else if (visaType === 'student_visas') {
+            response = "Student visa processing:\n\n• **F1 visa application**: 2-8 weeks\n• **I-20 processing** by school: 2-4 weeks\n• **Consular interview**: 1-4 weeks wait time\n\nTotal timeline: 2-4 months from application to arrival in US.";
+          } else {
+            response = "Processing times depend on your specific visa type:\n\n• **Tourist visas**: 2-4 weeks\n• **Work visas**: 3-8 months\n• **Student visas**: 2-4 months\n• **Family Green Cards**: 8 months to 20+ years\n• **Employment Green Cards**: 1-5+ years\n\nI'd be happy to give you specific timelines once you share your visa goals!";
+          }
+        } else if (question.includes('cost') || question.includes('fee') || question.includes('money') || question.includes('expensive')) {
+          response = "Immigration costs vary by visa type:\n\n**Work Visas:**\n• H1B: $2,000-$5,000 (employer pays most)\n• L1: $1,500-$3,000\n\n**Family Green Cards:**\n• $1,760 USCIS fees + $325 consular fees\n• Plus medical exam ($200-$500)\n\n**Student Visas:**\n• $160 visa fee + $350 SEVIS fee\n• Plus school costs\n\nAttorney fees typically add $2,000-$8,000 depending on complexity.";
+        } else if (question.includes('document') || question.includes('paperwork') || question.includes('requirement')) {
+          response = "Required documents typically include:\n\n**All visa types:**\n• Valid passport\n• Photos\n• Form DS-160 or equivalent\n• Financial support evidence\n\n**Work visas:** Employment letter, educational credentials\n**Family visas:** Marriage/birth certificates, sponsor's documents\n**Student visas:** I-20, acceptance letter, transcripts\n\nI can provide a specific checklist once you tell me your visa type!";
+        } else if (question.includes('move') || question.includes('immigrate') || question.includes('live')) {
+          response = "To move to the US permanently, your main options are:\n\n**1. Family-based Green Card** (if you have US citizen/resident relatives)\n**2. Employment-based Green Card** (through job offer)\n**3. Investment visa** (EB-5, $800K+ investment)\n**4. Diversity visa lottery** (if your country qualifies)\n\nMost people start with a temporary visa (work/student) then transition to permanent residence. What's your current situation?";
         } else {
-          response = "Processing times depend on your specific visa type:\n\n• **Tourist visas**: 2-4 weeks\n• **Work visas**: 3-8 months\n• **Student visas**: 2-4 months\n• **Family Green Cards**: 8 months to 20+ years\n• **Employment Green Cards**: 1-5+ years\n\nI'd be happy to give you specific timelines once you share your visa goals!";
+          response = "That's a great question! Based on your interest in US immigration, here are some key points:\n\n• The path depends on your specific situation and goals\n• Most successful cases involve careful planning and proper documentation\n• Timeline and costs vary significantly by visa type\n• Having the right legal guidance makes a huge difference\n\nFor the most accurate advice, I'd recommend getting a personalized assessment based on your specific circumstances.";
         }
-      } else if (question.includes('cost') || question.includes('fee') || question.includes('money') || question.includes('expensive')) {
-        response = "Immigration costs vary by visa type:\n\n**Work Visas:**\n• H1B: $2,000-$5,000 (employer pays most)\n• L1: $1,500-$3,000\n\n**Family Green Cards:**\n• $1,760 USCIS fees + $325 consular fees\n• Plus medical exam ($200-$500)\n\n**Student Visas:**\n• $160 visa fee + $350 SEVIS fee\n• Plus school costs\n\nAttorney fees typically add $2,000-$8,000 depending on complexity.";
-      } else if (question.includes('document') || question.includes('paperwork') || question.includes('requirement')) {
-        response = "Required documents typically include:\n\n**All visa types:**\n• Valid passport\n• Photos\n• Form DS-160 or equivalent\n• Financial support evidence\n\n**Work visas:** Employment letter, educational credentials\n**Family visas:** Marriage/birth certificates, sponsor's documents\n**Student visas:** I-20, acceptance letter, transcripts\n\nI can provide a specific checklist once you tell me your visa type!";
-      } else if (question.includes('move') || question.includes('immigrate') || question.includes('live')) {
-        response = "To move to the US permanently, your main options are:\n\n**1. Family-based Green Card** (if you have US citizen/resident relatives)\n**2. Employment-based Green Card** (through job offer)\n**3. Investment visa** (EB-5, $800K+ investment)\n**4. Diversity visa lottery** (if your country qualifies)\n\nMost people start with a temporary visa (work/student) then transition to permanent residence. What's your current situation?";
-      } else {
-        response = "That's a great question! Based on your interest in US immigration, here are some key points:\n\n• The path depends on your specific situation and goals\n• Most successful cases involve careful planning and proper documentation\n• Timeline and costs vary significantly by visa type\n• Having the right legal guidance makes a huge difference\n\nFor the most accurate advice, I'd recommend getting a personalized assessment based on your specific circumstances.";
+        
+        // Replace the "looking up" message with fallback response
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage && !lastMessage.isUser && lastMessage.text.includes("Let me look that up")) {
+            lastMessage.text = response;
+          }
+          return newMessages;
+        });
       }
-      
-      addMessage(response);
       
       await simulateTyping(1000);
       addMessage("Do you have any other questions?", false, true, [

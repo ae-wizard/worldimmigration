@@ -10,10 +10,16 @@ from db import init_db, log_conversation, create_lead
 
 app = FastAPI(title="AI Immigration Consultant API - Guided Mode")
 
-# Enable CORS for local dev
+# Enable CORS for local dev and production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://localhost:5173",
+        "https://worldimmigrationconsultant.com",
+        "https://www.worldimmigrationconsultant.com",
+        "https://beamish-marshmallow-c3f81a.netlify.app"
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
