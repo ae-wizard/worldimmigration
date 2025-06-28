@@ -2,7 +2,7 @@
 // Use localhost during development, will be updated for production
 
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-backend-api.com'  // We'll update this when AWS is deployed
+  ? 'http://worldimmigration-lb-347178547.us-east-1.elb.amazonaws.com'  // AWS Load Balancer
   : 'http://localhost:8000';
 
 class ApiService {
